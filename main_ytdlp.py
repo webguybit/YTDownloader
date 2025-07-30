@@ -1,6 +1,6 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from pytube import YouTube, Playlist
+import yt_dlp
 import os
 import threading
 import subprocess
@@ -8,13 +8,13 @@ import subprocess
 class YouTubeDownloaderApp:
     def __init__(self, master):
         self.master = master
-        self.master.title("YouTube Downloader")
+        self.master.title("YouTube Downloader (yt-dlp)")
         self.master.geometry("600x450")
         self.video_url = tk.StringVar()
         self.output_path = tk.StringVar(value=os.getcwd())
         self.download_type = tk.StringVar(value="video")
         self.resolution = tk.StringVar(value="720p")
-        self.streams = []
+        self.formats = []
         self.progress = tk.DoubleVar()
         self.current_download_title = ""
         self.spinner_running = False
@@ -63,7 +63,7 @@ class YouTubeDownloaderApp:
         tk.Button(self.master, text="Browse Output Folder", command=self.select_output_folder).pack(pady=5)
         tk.Label(self.master, textvariable=self.output_path).pack()
 
-        tk.Button(self.master, text="Fetch Options", command=self.load_streams).pack(pady=10)
+        tk.Button(self.master, text="Fetch Options", command=self.load_formats).pack(pady=10)
         tk.Button(self.master, text="Download", command=self.start_download_thread).pack()
 
         self.progress_bar = ttk.Progressbar(self.master, orient="horizontal", mode="determinate", variable=self.progress)
@@ -91,29 +91,45 @@ class YouTubeDownloaderApp:
         if folder:
             self.output_path.set(folder)
 
+    def progress_hook(self, d):
+        if d['status'] == 'downloading':
+            if 'total_bytes' in d and d['total_bytes']:
+                percent = (d['downloaded_bytes'] / d['total_bytes']) * 100
+                self.progress.set(percent)
+        elif d['status'] == 'finished':
+            self.progress.set(100)
 
-
-    def on_progress(self, stream, chunk, bytes_remaining):
-        total = stream.filesize
-        downloaded = total - bytes_remaining
-        percent = downloaded / total * 100
-        self.progress.set(percent)
-
-    def load_streams(self):
+    def load_formats(self):
         url = self.video_url.get()
         if not url:
             self.log("[ERROR] URL is empty")
             return
 
-        self.log("[INFO] Fetching available streams...")
-        if self.download_type.get() == "video":
-            yt = YouTube(url)
-            streams = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc()
-            self.streams = list(streams)
-            resolutions = sorted(set(s.resolution for s in streams if s.resolution))
-            self.res_combo['values'] = resolutions
-            self.res_combo.set("720p" if "720p" in resolutions else resolutions[0])
-            self.log(f"[INFO] Found resolutions: {resolutions}")
+        self.log("[INFO] Fetching available formats...")
+        self.start_spinner("Fetching formats...")
+        
+        try:
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+            }
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                if self.download_type.get() == "video":
+                    formats = [f for f in info.get('formats', []) if f.get('vcodec') != 'none' and f.get('acodec') != 'none']
+                    resolutions = sorted(set(f.get('resolution', 'N/A') for f in formats if f.get('resolution')), reverse=True)
+                    self.res_combo['values'] = resolutions
+                    self.res_combo.set("720p" if "720p" in resolutions else resolutions[0] if resolutions else "720p")
+                    self.log(f"[INFO] Found resolutions: {resolutions}")
+                
+                self.formats = info.get('formats', [])
+                
+        except Exception as e:
+            self.log(f"[ERROR] Failed to fetch formats: {str(e)}")
+        finally:
+            self.stop_spinner()
 
     def start_download_thread(self):
         threading.Thread(target=self.download).start()
@@ -126,34 +142,45 @@ class YouTubeDownloaderApp:
             self.start_spinner("Downloading...")
 
             if self.download_type.get() == "video":
-                yt = YouTube(url, on_progress_callback=self.on_progress)
-                stream = yt.streams.filter(progressive=True, file_extension='mp4', res=self.resolution.get()).first()
-                if stream:
-                    self.log(f"[INFO] Downloading video: {yt.title}")
-                    stream.download(output_path=output)
+                ydl_opts = {
+                    'format': f'best[height<={self.resolution.get().replace("p", "")}]',
+                    'outtmpl': os.path.join(output, '%(title)s.%(ext)s'),
+                    'progress_hooks': [self.progress_hook],
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    self.log("[INFO] Starting video download...")
+                    ydl.download([url])
                     self.log("[SUCCESS] Video downloaded.")
 
             elif self.download_type.get() == "audio":
-                yt = YouTube(url, on_progress_callback=self.on_progress)
-                stream = yt.streams.filter(only_audio=True).first()
-                self.log(f"[INFO] Downloading audio: {yt.title}")
-                out_file = stream.download(output_path=output)
-                mp3_file = os.path.splitext(out_file)[0] + ".mp3"
-                self.log(f"[INFO] Converting to MP3...")
-                self.start_spinner("Converting to MP3...")
-                subprocess.run(["ffmpeg", "-y", "-i", out_file, mp3_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                os.remove(out_file)
-                self.log(f"[SUCCESS] MP3 saved: {mp3_file}")
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'outtmpl': os.path.join(output, '%(title)s.%(ext)s'),
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                    'progress_hooks': [self.progress_hook],
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    self.log("[INFO] Starting audio download...")
+                    ydl.download([url])
+                    self.log("[SUCCESS] MP3 downloaded.")
 
             elif self.download_type.get() == "playlist":
-                pl = Playlist(url)
-                self.log(f"[INFO] Downloading playlist: {pl.title}")
-                for video in pl.videos:
-                    stream = video.streams.filter(progressive=True, file_extension='mp4').first()
-                    if stream:
-                        self.log(f"[INFO] Downloading: {video.title}")
-                        stream.download(output_path=output)
-                self.log("[SUCCESS] Playlist download complete.")
+                ydl_opts = {
+                    'format': 'best[height<=720]',
+                    'outtmpl': os.path.join(output, '%(playlist_title)s/%(title)s.%(ext)s'),
+                    'progress_hooks': [self.progress_hook],
+                }
+                
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    self.log("[INFO] Starting playlist download...")
+                    ydl.download([url])
+                    self.log("[SUCCESS] Playlist download complete.")
 
         except Exception as e:
             self.log(f"[ERROR] {str(e)}")
@@ -165,4 +192,4 @@ class YouTubeDownloaderApp:
 if __name__ == '__main__':
     root = tk.Tk()
     app = YouTubeDownloaderApp(root)
-    root.mainloop()
+    root.mainloop() 

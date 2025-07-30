@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Downloader - macOS App</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 30px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .radio-group {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        
+        .radio-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: normal;
+        }
+        
+        .radio-group input[type="radio"] {
+            width: auto;
+            margin-right: 8px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            flex: 1;
+        }
+        
+        .btn-success {
+            background: #51cf66;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #40c057;
+            transform: translateY(-2px);
+        }
+        
+        .btn-warning {
+            background: #ffd43b;
+            color: #333;
+        }
+        
+        .btn-warning:hover {
+            background: #fcc419;
+            transform: translateY(-2px);
+        }
+        
+        .progress-container {
+            margin-top: 20px;
+            display: none;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #e1e5e9;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #51cf66, #40c057);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .status {
+            text-align: center;
+            font-weight: 600;
+            color: #333;
+        }
+        
+        .log {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+            font-size: 14px;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .log-success { color: #51cf66; }
+        .log-error { color: #ff6b6b; }
+        .log-info { color: #667eea; }
+        
+        .alert {
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .mac-info {
+            background: #f8f9fa;
+            border: 1px solid #e1e5e9;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .mac-info h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .mac-info p {
+            color: #666;
+            margin-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎥 YouTube Downloader</h1>
+            <p>Native macOS App for Apple Silicon</p>
+        </div>
+        
+        <div class="content">
+            <div class="mac-info">
+                <h3>📱 macOS App Features</h3>
+                <p>• Native Apple Silicon optimization</p>
+                <p>• Downloads saved to ~/Downloads folder</p>
+                <p>• No installation required - just run the app</p>
+                <p>• Works offline after first launch</p>
+            </div>
+            
+            <div id="alert" class="alert"></div>
+            
+            <form id="downloadForm">
+                <div class="form-group">
+                    <label for="url">YouTube URL:</label>
+                    <input type="url" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+                </div>
+                
+                <div class="form-group">
+                    <label>Download Type:</label>
+                    <div class="radio-group">
+                        <label>
+                            <input type="radio" name="type" value="video" checked>
+                            Video
+                        </label>
+                        <label>
+                            <input type="radio" name="type" value="audio">
+                            Audio (MP3)
+                        </label>
+                        <label>
+                            <input type="radio" name="type" value="playlist">
+                            Playlist
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="quality">Quality:</label>
+                    <select id="quality" name="quality">
+                        <option value="720p">720p</option>
+                        <option value="1080p">1080p</option>
+                        <option value="480p">480p</option>
+                        <option value="360p">360p</option>
+                        <option value="Best">Best</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="output_dir">Output Directory:</label>
+                    <input type="text" id="output_dir" name="output_dir" value="~/Downloads" readonly>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn btn-warning" onclick="testUrl()">Test URL</button>
+                    <button type="submit" class="btn btn-success">Download</button>
+                </div>
+            </form>
+            
+            <div class="progress-container" id="progressContainer">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="status" id="status">Ready</div>
+            </div>
+            
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentDownloadId = null;
+        let statusInterval = null;
+        
+        // Update quality options based on download type
+        document.querySelectorAll('input[name="type"]').forEach(radio => {
+            radio.addEventListener('change', updateQualityOptions);
+        });
+        
+        function updateQualityOptions() {
+            const type = document.querySelector('input[name="type"]:checked').value;
+            const qualitySelect = document.getElementById('quality');
+            
+            if (type === 'audio') {
+                qualitySelect.innerHTML = `
+                    <option value="192k">192k</option>
+                    <option value="128k">128k</option>
+                    <option value="64k">64k</option>
+                `;
+            } else if (type === 'playlist') {
+                qualitySelect.innerHTML = `
+                    <option value="720p">720p</option>
+                    <option value="480p">480p</option>
+                    <option value="360p">360p</option>
+                `;
+            } else {
+                qualitySelect.innerHTML = `
+                    <option value="720p">720p</option>
+                    <option value="1080p">1080p</option>
+                    <option value="480p">480p</option>
+                    <option value="360p">360p</option>
+                    <option value="Best">Best</option>
+                `;
+            }
+        }
+        
+        function showAlert(message, type = 'info') {
+            const alert = document.getElementById('alert');
+            alert.textContent = message;
+            alert.className = `alert alert-${type}`;
+            alert.style.display = 'block';
+            
+            setTimeout(() => {
+                alert.style.display = 'none';
+            }, 5000);
+        }
+        
+        function addLog(message, type = 'info') {
+            const log = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+        
+        async function testUrl() {
+            const url = document.getElementById('url').value;
+            if (!url) {
+                showAlert('Please enter a URL', 'error');
+                return;
+            }
+            
+            addLog('Testing URL...', 'info');
+            
+            try {
+                const response = await fetch('/test_url', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url: url })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addLog(`URL is valid! Title: ${data.title}`, 'success');
+                    addLog(`Duration: ${data.duration} seconds`, 'info');
+                    addLog(`Uploader: ${data.uploader}`, 'info');
+                    showAlert('URL is valid!', 'success');
+                } else {
+                    addLog(`URL test failed: ${data.message}`, 'error');
+                    showAlert(data.message, 'error');
+                }
+            } catch (error) {
+                addLog(`Error testing URL: ${error}`, 'error');
+                showAlert('Error testing URL', 'error');
+            }
+        }
+        
+        document.getElementById('downloadForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const formData = new FormData(this);
+            const data = {
+                url: formData.get('url'),
+                type: formData.get('type'),
+                quality: formData.get('quality'),
+                output_dir: formData.get('output_dir')
+            };
+            
+            if (!data.url) {
+                showAlert('Please enter a URL', 'error');
+                return;
+            }
+            
+            addLog('Starting download...', 'info');
+            showAlert('Starting download...', 'info');
+            
+            // Show progress container
+            document.getElementById('progressContainer').style.display = 'block';
+            
+            try {
+                const response = await fetch('/start_download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    currentDownloadId = result.download_id;
+                    addLog(`Download started with ID: ${currentDownloadId}`, 'success');
+                    startStatusPolling();
+                } else {
+                    addLog(`Failed to start download: ${result.message}`, 'error');
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                addLog(`Error starting download: ${error}`, 'error');
+                showAlert('Error starting download', 'error');
+            }
+        });
+        
+        function startStatusPolling() {
+            if (statusInterval) {
+                clearInterval(statusInterval);
+            }
+            
+            statusInterval = setInterval(async () => {
+                if (!currentDownloadId) return;
+                
+                try {
+                    const response = await fetch(`/download_status/${currentDownloadId}`);
+                    const status = await response.json();
+                    
+                    // Update progress bar
+                    const progressFill = document.getElementById('progressFill');
+                    const statusText = document.getElementById('status');
+                    
+                    progressFill.style.width = `${status.progress}%`;
+                    statusText.textContent = status.message;
+                    
+                    // Add log entry for status changes
+                    if (status.status === 'completed') {
+                        addLog('Download completed successfully!', 'success');
+                        showAlert('Download completed! Check your Downloads folder.', 'success');
+                        clearInterval(statusInterval);
+                        currentDownloadId = null;
+                    } else if (status.status === 'error') {
+                        addLog(`Download failed: ${status.error}`, 'error');
+                        showAlert(`Download failed: ${status.error}`, 'error');
+                        clearInterval(statusInterval);
+                        currentDownloadId = null;
+                    } else if (status.status === 'downloading') {
+                        addLog(`Progress: ${status.progress.toFixed(1)}%`, 'info');
+                    }
+                    
+                } catch (error) {
+                    addLog(`Error checking status: ${error}`, 'error');
+                }
+            }, 1000);
+        }
+        
+        // Initialize
+        updateQualityOptions();
+        addLog('YouTube Downloader macOS App Ready', 'success');
+        addLog('Downloads will be saved to ~/Downloads folder', 'info');
+    </script>
+</body>
+</html>

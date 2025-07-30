@@ -1,14 +1,16 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from pytube import YouTube, Playlist
+from pytubefix import YouTube, Playlist
 import os
 import threading
 import subprocess
+import urllib.request
+import socket
 
 class YouTubeDownloaderApp:
     def __init__(self, master):
         self.master = master
-        self.master.title("YouTube Downloader")
+        self.master.title("YouTube Downloader (pytubefix)")
         self.master.geometry("600x450")
         self.video_url = tk.StringVar()
         self.output_path = tk.StringVar(value=os.getcwd())
@@ -16,21 +18,19 @@ class YouTubeDownloaderApp:
         self.resolution = tk.StringVar(value="720p")
         self.streams = []
         self.progress = tk.DoubleVar()
-        self.current_download_title = ""
         self.spinner_running = False
         self.spinner_label = tk.Label(self.master, text="", font=("Courier", 12))
         self.spinner_label.pack()
 
         self.create_widgets()
 
-    # spinner start 
     def start_spinner(self, message="Processing"):
         self.spinner_running = True
         threading.Thread(target=self.animate_spinner, args=(message,), daemon=True).start()
 
     def stop_spinner(self):
         self.spinner_running = False
-        self.spinner_label.config(text="")  # Clear
+        self.spinner_label.config(text="")
 
     def animate_spinner(self, message):
         frames = ['⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏']
@@ -40,14 +40,13 @@ class YouTubeDownloaderApp:
             self.spinner_label.config(text=f"{frame} {message}")
             i += 1
             self.master.update_idletasks()
-            self.master.after(100)  # 10fps
-    # spinner end
+            self.master.after(100)
     
     def create_widgets(self):
         tk.Label(self.master, text="YouTube URL:").pack(pady=5)
         url_entry = tk.Entry(self.master, textvariable=self.video_url, width=60)
         url_entry.pack()
-        url_entry.bind("<Control-v>", lambda e: self.master.clipboard_get())  # Paste
+        url_entry.bind("<Control-v>", lambda e: self.master.clipboard_get())
 
         tk.Label(self.master, text="Download Type:").pack(pady=5)
         type_frame = tk.Frame(self.master)
@@ -91,8 +90,6 @@ class YouTubeDownloaderApp:
         if folder:
             self.output_path.set(folder)
 
-
-
     def on_progress(self, stream, chunk, bytes_remaining):
         total = stream.filesize
         downloaded = total - bytes_remaining
@@ -106,14 +103,26 @@ class YouTubeDownloaderApp:
             return
 
         self.log("[INFO] Fetching available streams...")
-        if self.download_type.get() == "video":
-            yt = YouTube(url)
-            streams = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc()
-            self.streams = list(streams)
-            resolutions = sorted(set(s.resolution for s in streams if s.resolution))
-            self.res_combo['values'] = resolutions
-            self.res_combo.set("720p" if "720p" in resolutions else resolutions[0])
-            self.log(f"[INFO] Found resolutions: {resolutions}")
+        self.start_spinner("Fetching streams...")
+        
+        def fetch():
+            try:
+                if self.download_type.get() == "video":
+                    yt = YouTube(url)
+                    streams = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc()
+                    self.streams = list(streams)
+                    resolutions = sorted(set(s.resolution for s in streams if s.resolution), reverse=True)
+                    self.res_combo['values'] = resolutions
+                    self.res_combo.set("720p" if "720p" in resolutions else resolutions[0] if resolutions else "720p")
+                    self.log(f"[INFO] Found resolutions: {resolutions}")
+                    self.log(f"[INFO] Video title: {yt.title}")
+                
+            except Exception as e:
+                self.log(f"[ERROR] Failed to fetch streams: {str(e)}")
+            finally:
+                self.stop_spinner()
+        
+        threading.Thread(target=fetch, daemon=True).start()
 
     def start_download_thread(self):
         threading.Thread(target=self.download).start()
@@ -161,8 +170,7 @@ class YouTubeDownloaderApp:
         finally:
             self.stop_spinner()
 
-# Launch
 if __name__ == '__main__':
     root = tk.Tk()
     app = YouTubeDownloaderApp(root)
-    root.mainloop()
+    root.mainloop() 
